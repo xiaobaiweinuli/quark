@@ -1,33 +1,38 @@
 import sqlite3
 
-import sqlite3
 
+# 创建内存数据库
 
-def fetch_files(file_name) -> bool:
-    """检索文件,如果已存在那么返回False"""
-    conn = sqlite3.connect('file.db')
-    c = conn.cursor()
-    c.execute('SELECT FILE_NAME FROM ALL_FILE WHERE FILE_NAME =?', (file_name,))
-    files = c.fetchall()
-    conn.close()
-    if files:
-        return False
-    return True
+class SqlLiteOperator:
+    def __init__(self):
+        self.conn = sqlite3.connect('files.db')
+        self.create_table()
 
+    def create_table(self):
+        """创建文件检索表"""
+        c = self.conn.cursor()
+        c.execute('CREATE TABLE IF NOT EXISTS ALL_FILE (FILE_ID TEXT PRIMARY KEY, FILE_NAME TEXT NOT NULL, FILE_TYPE TEXT, SHARE_LINK TEXT);')
+        self.conn.commit()
 
-def insert_files(file_id, file_name, file_type, share_link):
-    """插入文件"""
-    conn = sqlite3.connect('file.db')
-    c = conn.cursor()
-    c.execute("INSERT INTO ALL_FILE VALUES (?,?,?,?)", (file_id, file_name, file_type, share_link))
-    conn.commit()
-    conn.close()
+    def fetch_files(self, file_name) -> bool:
+        """检索文件,如果已存在那么返回False"""
+        c = self.conn.cursor()
+        c.execute('SELECT FILE_NAME FROM ALL_FILE WHERE FILE_NAME =?', (file_name,))
+        files = c.fetchall()
+        if files:
+            return False
+        return True
 
+    def insert_files(self, file_id, file_name, file_type, share_link):
+        """插入文件"""
+        c = self.conn.cursor()
+        c.execute("INSERT INTO ALL_FILE VALUES (?,?,?,?)", (file_id, file_name, file_type, share_link))
+        self.conn.commit()
 
-def update_files(file_id, file_name):
-    conn = sqlite3.connect('file.db')
-    c = conn.cursor()
-    c.execute("UPDATE ALL_FILE SET FILE_ID=? WHERE FILE_NAME=?", (file_id, file_name))
-    conn.commit()
-    conn.close()
+    def update_files(self, file_id, file_name):
+        c = self.conn.cursor()
+        c.execute("UPDATE ALL_FILE SET FILE_ID=? WHERE FILE_NAME=?", (file_id, file_name))
+        self.conn.commit()
 
+    def __del__(self):
+        self.conn.close()

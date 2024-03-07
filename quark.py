@@ -1,8 +1,11 @@
-import requests
+import logging
+import random
 import re
 import time
-import random
-import logging
+
+import requests
+
+from sqlite import SqlLiteOperator
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -41,27 +44,34 @@ class Quark:
             'accept-language': 'zh-CN,zh;q=0.9',
             'cookie': cookie}
 
+        self.operator = SqlLiteOperator()
+        self.parent_dir = None
+
     def store(self, url: str):
         pwd_id = get_id_from_url(url)
         stoken = self.get_stoken(pwd_id)
         detail = self.detail(pwd_id, stoken)
         file_name = detail.get('title')
-        from sqlite import fetch_files
-        if fetch_files(file_name):
+
+        if self.operator.fetch_files(file_name):
             first_id, share_fid_token, file_type = detail.get("fid"), detail.get("share_fid_token"), detail.get(
                 "file_type")
-            task = self.save_task_id(pwd_id, stoken, first_id, share_fid_token)
+
+            # 匹配指定的父目录，仅支持根目录下的目录
+            other_args = {}
+            if self.parent_dir is not None:
+                other_args['to_pdir_fid'] = self.parent_dir
+
+            task = self.save_task_id(pwd_id, stoken, first_id, share_fid_token, **other_args)
             data = self.task(task)
             file_id = data.get("data").get("save_as").get("save_as_top_fids")[0]
             if not file_type:
                 dir_file_list = self.get_dir_file(file_id)
                 self.del_ad_file(dir_file_list)
-                self.add_ad(file_id)
             share_task_id = self.share_task_id(file_id, file_name)
             share_id = self.task(share_task_id).get("data").get("share_id")
             share_link = self.get_share_link(share_id)
-            from sqlite import insert_files
-            insert_files(file_id, file_name, file_type, share_link)
+            self.operator.insert_files(file_id, file_name, file_type, share_link)
 
     def get_stoken(self, pwd_id: str):
         url = f"https://drive-pc.quark.cn/1/clouddrive/share/sharepage/token?pr=ucpro&fr=pc&uc_param_str=&__dt=405&__t={generate_timestamp(13)}"
@@ -96,6 +106,10 @@ class Quark:
             return data
 
     def save_task_id(self, pwd_id, stoken, first_id, share_fid_token, to_pdir_fid=0):
+        """
+        pwd_id: 资源目录
+        stoken: stoken
+        """
         logging.info("获取保存文件的TASKID")
         url = "https://drive.quark.cn/1/clouddrive/share/sharepage/save"
         params = {
@@ -114,18 +128,28 @@ class Quark:
         task_id = response.json().get('data').get('task_id')
         return task_id
 
-    def task(self, task_id, trice=10):
+    def set_store_dir(self, name_or_id):
+        """
+        :param name_or_id: 存储的文件夹名称或者id，只支持根目录下的目录
+        :return:
+        """
+        logging.info("设置存储目录")
+        files = self.get_all_file()
+        pdir_id = [x for x in files if x['file_name'] == name_or_id or x['fid'] == name_or_id]
+        if pdir_id:
+            self.parent_dir = pdir_id[0]['fid']
+        else:
+            raise ValueError("文件夹不存在")
+
+    def task(self, task_id):
         """根据task_id进行任务"""
         logging.info("根据TASKID执行任务")
-        trys = 0
-        for i in range(trice):
+        while True:
             url = f"https://drive-pc.quark.cn/1/clouddrive/task?pr=ucpro&fr=pc&uc_param_str=&task_id={task_id}&retry_index={range}&__dt=21192&__t={generate_timestamp(13)}"
-            trys += 1
             response = requests.get(url, headers=self.headers).json()
             logging.info(response)
-            if response.get('data').get('status'):
+            if response.get('data').get('status') == 2:
                 return response
-        return False
 
     def share_task_id(self, file_id, file_name):
         """创建分享任务ID"""
@@ -145,15 +169,10 @@ class Quark:
     def get_all_file(self):
         """获取所有文件id"""
         logging.info("正在获取所有文件")
-        all_file = []
         url = "https://drive-pc.quark.cn/1/clouddrive/file/sort?pr=ucpro&fr=pc&uc_param_str=&pdir_fid=0&_page=1&_size=50&_fetch_total=1&_fetch_sub_dirs=0&_sort=file_type:asc,updated_at:desc"
         response = requests.get(url, headers=self.headers)
-        files_list = response.json().get('data').get('list')
-        for files in files_list:
-            file_list = files.get("files")
-            for i in file_list:
-                all_file.append(i)
-        return all_file
+        file_list = response.json().get('data').get('list')
+        return file_list
 
     def get_dir_file(self, dir_id) -> list:
         logging.info("正在遍历父文件夹")
@@ -181,16 +200,6 @@ class Quark:
                 task_id = self.del_file(file.get("fid"))
                 self.task(task_id)
 
-    def add_ad(self, dir_id):
-        logging.info("添加个人自定义广告")
-        pwd_id = self.ad_pwd_id
-        stoken = self.get_stoken(pwd_id)
-        detail = self.detail(pwd_id, stoken)
-        first_id, share_fid_token = detail.get("fid"), detail.get("share_fid_token")
-        task_id = self.save_task_id(pwd_id, stoken, first_id, share_fid_token, dir_id)
-        self.task(task_id, 1)
-        logging.info("广告移植成功")
-
     def search_file(self, file_name):
         logging.info("正在从网盘搜索文件🔍")
         url = "https://drive-pc.quark.cn/1/clouddrive/file/search?pr=ucpro&fr=pc&uc_param_str=&_page=1&_size=50&_fetch_total=1&_sort=file_type:desc,updated_at:desc&_is_hl=1"
@@ -203,4 +212,3 @@ if __name__ == '__main__':
     cookie = ''
     quark = Quark(cookie)
     quark.store('https://pan.quark.cn/s/92e708f45ca6#/list/share')
-
