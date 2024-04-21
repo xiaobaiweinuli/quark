@@ -25,7 +25,7 @@ def generate_timestamp(length):
 
 
 class Quark:
-    ad_pwd_id = "0df525db2bd0"
+    ad_pwd_id = "aa80ba2f39b2"
 
     def __init__(self, cookie: str) -> None:
         self.headers = {

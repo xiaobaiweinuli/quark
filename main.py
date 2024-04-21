@@ -2,10 +2,10 @@ import json
 
 from quark import Quark
 
-cookie = 'xxx'
+cookie = ''
 
 quark = Quark(cookie)
-quark.set_store_dir("视频转存")
+quark.set_store_dir("夸克文件夹id")
 
 file_urls = json.load(open("share-data.json", encoding="utf-8"))['data']
 

@@ -26,12 +26,12 @@ class SqlLiteOperator:
     def insert_files(self, file_id, file_name, file_type, share_link):
         """插入文件"""
         c = self.conn.cursor()
-        c.execute("INSERT INTO ALL_FILE VALUES (?,?,?,?)", (file_id, file_name, file_type, share_link))
+        c.execute("INSERT INTO ALL_FILE (FILE_NAME, SHARE_LINK) VALUES (?,?)", (file_name, share_link))
         self.conn.commit()
 
-    def update_files(self, file_id, file_name):
+    def update_files(self, file_name, share_link):
         c = self.conn.cursor()
-        c.execute("UPDATE ALL_FILE SET FILE_ID=? WHERE FILE_NAME=?", (file_id, file_name))
+        c.execute("UPDATE ALL_FILE SET SHARE_LINK=? WHERE FILE_NAME=?", (share_link, file_name))
         self.conn.commit()
 
     def __del__(self):
