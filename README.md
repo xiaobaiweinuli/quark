@@ -1,3 +1,6 @@
+# 新增
+自动把合集里的数据转成json格式进行转存，分享，导出，推到Github
+相应项目：[https://github.com/xiaobaiweinuli/duanju](https://github.com/xiaobaiweinuli/duanju)
 # quark
 夸克网盘转存分享一体化
 
@@ -12,7 +15,7 @@ from quark import Quark
 cookie = 'xxxx'
 
 quark = Quark(cookie)
-quark.set_store_dir("视频转存")
+quark.set_store_dir("夸克文件夹id")
 
 file_urls = json.load(open("share-data.json", encoding="utf-8"))['data']
 
